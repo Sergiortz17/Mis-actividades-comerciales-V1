@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.json">
+<title>Mi Grado · Actividades Comerciales</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#111827;--soft:#eef2ff}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--accent);color:white;padding:18px max(18px,calc((100% - 1100px)/2));position:sticky;top:0;z-index:10}
+header .top{display:flex;justify-content:space-between;align-items:center;gap:12px}header h1{margin:0;font-size:21px}header small{color:#d1d5db}
+main{max-width:1100px;margin:auto;padding:18px}.hidden{display:none!important}
+nav{display:flex;gap:8px;overflow:auto;margin-bottom:16px}nav button{white-space:nowrap}
+button{border:0;border-radius:10px;padding:10px 13px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+button.secondary{background:#e5e7eb;color:var(--text)}button.danger{background:#dc2626}button.ghost{background:transparent;color:inherit;border:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px;margin-bottom:14px}
+.card h2,.card h3{margin-top:0}.muted{color:var(--muted);font-size:14px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+input,textarea,select{width:100%;padding:11px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:var(--text);font:inherit;margin:5px 0 12px}textarea{min-height:170px;resize:vertical}
+label{font-weight:700;font-size:14px}.badge{display:inline-block;padding:4px 9px;border-radius:999px;background:#e5e7eb;font-size:12px;margin:2px}
+.option{display:block;width:100%;text-align:left;background:#f9fafb;color:var(--text);border:1px solid var(--line);margin:7px 0}.option.selected{border-color:#111827;background:#e5e7eb}.correct{border-color:#16a34a!important}.wrong{border-color:#dc2626!important}
+.stat{font-size:26px;font-weight:800}.search{margin-bottom:15px}.empty{text-align:center;padding:30px;color:var(--muted)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 15px;border-radius:10px;display:none;z-index:30}
+dialog{border:0;border-radius:18px;padding:0;max-width:430px;width:calc(100% - 30px);box-shadow:0 20px 60px #0004}dialog::backdrop{background:#0008}.modal{padding:20px}
+@media(max-width:600px){main{padding:12px}header{padding:15px 12px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="top"><div><h1>📚 Mi Grado</h1><small>Actividades Comerciales</small></div><div id="accountArea"></div></div></header>
+<main>
+<div id="authView">
+  <div class="card" style="max-width:480px;margin:35px auto">
+    <h2>Tu centro de estudio</h2><p class="muted">Inicia sesión para que tus apuntes, resúmenes y tests se sincronicen entre móvil y ordenador.</p>
+    <label>Email</label><input id="email" type="email" placeholder="tu@email.com">
+    <label>Contraseña</label><input id="password" type="password" placeholder="Mínimo 6 caracteres">
+    <div class="actions"><button onclick="signIn()">Iniciar sesión</button><button class="secondary" onclick="signUp()">Crear cuenta</button></div>
+    <p id="authMsg" class="muted"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+<nav>
+<button onclick="dashboard()">🏠 Inicio</button><button onclick="subjectsPage()">📚 Asignaturas</button><button onclick="allNotes()">📝 Apuntes</button><button onclick="allTests()">🧠 Tests</button><button onclick="addMenu()">➕ Añadir</button>
+</nav>
+<div id="content"></div>
+</div>
+</main>
+<div id="toast"></div>
+
+<dialog id="noteDialog"><div class="modal">
+<h2>📚 Nuevo apunte / resumen</h2><label>Asignatura</label><select id="noteSubject"></select>
+<label>Título</label><input id="noteTitle" placeholder="Ej.: Tema 5 — Marketing para móviles">
+<label>Tema</label><input id="noteTopic" placeholder="Ej.: Tema 5">
+<label>Contenido</label><textarea id="noteText" placeholder="Escribe o pega aquí el resumen..."></textarea>
+<div class="actions"><button onclick="saveNote()">Guardar</button><button class="secondary" onclick="noteDialog.close()">Cancelar</button></div>
+</div></dialog>
+
+<dialog id="testDialog"><div class="modal">
+<h2>🧠 Nuevo test</h2><label>Asignatura</label><select id="testSubject"></select>
+<label>Título</label><input id="testTitle" placeholder="Ej.: Test Tema 5">
+<div id="questions"></div>
+<div class="actions"><button class="secondary" onclick="addQuestion()">➕ Pregunta</button><button onclick="saveTest()">Guardar test</button><button class="secondary" onclick="testDialog.close()">Cancelar</button></div>
+</div></dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ====== CONFIGURA ESTAS DOS VARIABLES CON TU PROYECTO SUPABASE ====== */
+const SUPABASE_URL = "PON_AQUI_TU_PROJECT_URL";
+const SUPABASE_ANON_KEY = "PON_AQUI_TU_ANON_KEY";
+/* ================================================================ */
+
+const subjects=[
+"Marketing en la actividad comercial","Procesos de venta","Gestión de compras",
+"Dinamización del punto de venta","Aplicaciones informáticas para el comercio",
+"Digitalización aplicada a los sectores productivos","Itinerario personal para la empleabilidad I","Inglés profesional"
+];
+
+let sb=null,user=null, notes=[], tests=[], answers={};
+
+function toast(t){const x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function nl(s){return esc(s).replace(/\n/g,"<br>")}
+function fillSubjects(){["noteSubject","testSubject"].forEach(id=>document.getElementById(id).innerHTML=subjects.map(s=>`<option>${esc(s)}</option>`).join(""))}
+function configured(){return !SUPABASE_URL.includes("PON_AQUI")&&!SUPABASE_ANON_KEY.includes("PON_AQUI")}
+async function init(){
+ fillSubjects();
+ if(!configured()){document.getElementById("authView").innerHTML=`<div class="card"><h2>⚙️ Falta configurar la nube</h2><p>Abre <b>index.html</b> y sustituye las dos variables de configuración por las de tu proyecto Supabase. Los pasos están en README.md.</p></div>`;return}
+ sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+ const {data:{session}}=await sb.auth.getSession(); if(session) await logged(session.user);
+ sb.auth.onAuthStateChange(async(_,session)=>{if(session) await logged(session.user);else logoutUI()});
+}
+async function signIn(){if(!sb)return;const email=document.getElementById("email").value.trim(),password=document.getElementById("password").value;const {error}=await sb.auth.signInWithPassword({email,password});document.getElementById("authMsg").textContent=error?error.message:"Entrando..."}
+async function signUp(){if(!sb)return;const email=document.getElementById("email").value.trim(),password=document.getElementById("password").value;if(password.length<6)return authMsg("La contraseña debe tener al menos 6 caracteres.");const {error}=await sb.auth.signUp({email,password});authMsg(error?error.message:"Cuenta creada. Revisa tu correo si Supabase pide confirmación.")}
+function authMsg(x){document.getElementById("authMsg").textContent=x}
+async function logged(u){user=u;document.getElementById("authView").classList.add("hidden");document.getElementById("app").classList.remove("hidden");document.getElementById("accountArea").innerHTML=`<button class="ghost" onclick="signOut()">Salir</button>`;await loadData();dashboard()}
+function logoutUI(){user=null;document.getElementById("authView").classList.remove("hidden");document.getElementById("app").classList.add("hidden");document.getElementById("accountArea").innerHTML=""}
+async function signOut(){await sb.auth.signOut()}
+async function loadData(){
+ const [n,t]=await Promise.all([sb.from("notes").select("*").order("created_at",{ascending:false}),sb.from("tests").select("*").order("created_at",{ascending:false})]);
+ if(n.error||t.error){toast("Error cargando datos. Revisa la configuración de Supabase.");console.error(n.error,t.error);return}
+ notes=n.data||[];tests=t.data||[];
+}
+function dashboard(){
+ let totalQ=tests.reduce((a,t)=>a+(t.questions?.length||0),0);
+ document.getElementById("content").innerHTML=`<div class="grid">
+ <div class="card"><div class="muted">Apuntes y resúmenes</div><div class="stat">${notes.length}</div></div>
+ <div class="card"><div class="muted">Tests creados</div><div class="stat">${tests.length}</div></div>
+ <div class="card"><div class="muted">Preguntas</div><div class="stat">${totalQ}</div></div>
+ </div><div class="card"><h2>⚡ Acciones rápidas</h2><div class="actions"><button onclick="openNote()">➕ Añadir apunte</button><button onclick="openTest()">➕ Crear test</button><button class="secondary" onclick="loadData().then(dashboard)">🔄 Sincronizar</button></div></div>
+ <div class="card"><h2>📌 Últimos apuntes</h2>${notes.slice(0,5).map(noteCard).join("")||'<div class="empty">Todavía no has añadido apuntes.</div>'}</div>`;
+}
+function subjectsPage(){document.getElementById("content").innerHTML=`<h2>Asignaturas</h2><div class="grid">${subjects.map(s=>`<div class="card"><h3>${esc(s)}</h3><p class="muted">${notes.filter(n=>n.subject===s).length} apuntes · ${tests.filter(t=>t.subject===s).length} tests</p><button onclick='subjectPage(${JSON.stringify(s)})'>Entrar</button></div>`).join("")}</div>`}
+function subjectPage(s){document.getElementById("content").innerHTML=`<button class="secondary" onclick="subjectsPage()">← Asignaturas</button><h2>${esc(s)}</h2><div class="actions"><button onclick='openNote(${JSON.stringify(s)})'>➕ Apunte</button><button onclick='openTest(${JSON.stringify(s)})'>➕ Test</button></div><h2>📚 Apuntes</h2>${notes.filter(n=>n.subject===s).map(noteCard).join("")||'<div class="empty">Sin apuntes.</div>'}<h2>🧠 Tests</h2>${tests.filter(t=>t.subject===s).map(testCard).join("")||'<div class="empty">Sin tests.</div>'}`}
+function noteCard(n){return `<div class="card"><div class="row"><div><span class="badge">${esc(n.subject)}</span><span class="badge">${esc(n.topic||"")}</span><h3>${esc(n.title)}</h3></div><button class="danger" onclick="deleteNote('${n.id}')">Borrar</button></div><div>${nl(n.content)}</div></div>`}
+function testCard(t){return `<div class="card"><div class="row"><div><span class="badge">${esc(t.subject)}</span><h3>${esc(t.title)}</h3><p class="muted">${t.questions.length} preguntas</p></div><div class="actions"><button onclick="takeTest('${t.id}')">Hacer test</button><button class="danger" onclick="deleteTest('${t.id}')">Borrar</button></div></div></div>`}
+function allNotes(){document.getElementById("content").innerHTML=`<h2>📚 Todos los apuntes</h2><input class="search" placeholder="🔎 Buscar..." oninput="filterNotes(this.value)"><div id="noteList">${notes.map(noteCard).join("")||'<div class="empty">Sin apuntes.</div>'}</div>`}
+function filterNotes(q){q=q.toLowerCase();document.getElementById("noteList").innerHTML=notes.filter(n=>(n.title+" "+n.content+" "+n.subject+" "+(n.topic||"")).toLowerCase().includes(q)).map(noteCard).join("")||'<div class="empty">No encontrado.</div>'}
+function allTests(){document.getElementById("content").innerHTML=`<h2>🧠 Todos los tests</h2>${tests.map(testCard).join("")||'<div class="empty">Sin tests.</div>'}`}
+function addMenu(){document.getElementById("content").innerHTML=`<div class="grid"><div class="card"><h2>📚 Apunte / resumen</h2><p>Guarda teoría, resúmenes o explicaciones.</p><button onclick="openNote()">Crear apunte</button></div><div class="card"><h2>🧠 Test</h2><p>Crea preguntas y marca las respuestas correctas.</p><button onclick="openTest()">Crear test</button></div></div>`}
+function openNote(subject){fillSubjects();if(subject)noteSubject.value=subject;noteTitle.value="";noteTopic.value="";noteText.value="";noteDialog.showModal()}
+async function saveNote(){const payload={user_id:user.id,subject:noteSubject.value,title:noteTitle.value.trim(),topic:noteTopic.value.trim(),content:noteText.value.trim()};if(!payload.title||!payload.content)return toast("Completa título y contenido.");const {error}=await sb.from("notes").insert(payload);if(error)return toast(error.message);noteDialog.close();await loadData();toast("Guardado y sincronizado");dashboard()}
+async function deleteNote(id){if(!confirm("¿Borrar este apunte?"))return;const {error}=await sb.from("notes").delete().eq("id",id);if(error)return toast(error.message);await loadData();dashboard()}
+let qCount=0;
+function openTest(subject){fillSubjects();if(subject)testSubject.value=subject;testTitle.value="";questions.innerHTML="";qCount=0;addQuestion();testDialog.showModal()}
+function addQuestion(){qCount++;questions.insertAdjacentHTML("beforeend",`<div class="card question"><div class="row"><b>Pregunta ${qCount}</b><button class="danger" type="button" onclick="this.closest('.question').remove()">Quitar</button></div><input class="qtext" placeholder="Pregunta"><input class="qopt" placeholder="Opción A"><input class="qopt" placeholder="Opción B"><input class="qopt" placeholder="Opción C"><input class="qopt" placeholder="Opción D"><select class="qcorrect"><option value="0">Correcta: A</option><option value="1">Correcta: B</option><option value="2">Correcta: C</option><option value="3">Correcta: D</option></select></div>`)}
+async function saveTest(){const qs=[...document.querySelectorAll("#questions .question")].map(b=>({text:b.querySelector(".qtext").value.trim(),options:[...b.querySelectorAll(".qopt")].map(x=>x.value.trim()),correct:Number(b.querySelector(".qcorrect").value)})).filter(q=>q.text&&q.options.length===4&&q.options.every(Boolean));if(!testTitle.value.trim()||!qs.length)return toast("Añade título y al menos una pregunta completa.");const payload={user_id:user.id,subject:testSubject.value,title:testTitle.value.trim(),questions:qs};const {error}=await sb.from("tests").insert(payload);if(error)return toast(error.message);testDialog.close();await loadData();toast("Test guardado y sincronizado");dashboard()}
+async function deleteTest(id){if(!confirm("¿Borrar este test?"))return;const {error}=await sb.from("tests").delete().eq("id",id);if(error)return toast(error.message);await loadData();dashboard()}
+function takeTest(id){const t=tests.find(x=>x.id===id);answers={};document.getElementById("content").innerHTML=`<button class="secondary" onclick="allTests()">← Tests</button><div class="card"><h2>${esc(t.title)}</h2><p class="muted">${esc(t.subject)}</p>${t.questions.map((q,i)=>`<div class="question" data-i="${i}"><b>${i+1}. ${esc(q.text)}</b>${q.options.map((o,j)=>`<button class="option" onclick="pick(${i},${j},this)">${String.fromCharCode(65+j)}. ${esc(o)}</button>`).join("")}</div>`).join("")}<button onclick="finish('${t.id}')">Comprobar resultado</button><div id="result"></div></div>`}
+function pick(i,j,b){answers[i]=j;b.parentElement.querySelectorAll(".option").forEach(x=>x.classList.remove("selected"));b.classList.add("selected")}
+function finish(id){const t=tests.find(x=>x.id===id);let score=0;t.questions.forEach((q,i)=>{const box=document.querySelector(`[data-i="${i}"]`);box.querySelectorAll(".option").forEach((b,j)=>{if(j===q.correct)b.classList.add("correct");if(answers[i]===j&&j!==q.correct)b.classList.add("wrong")});if(answers[i]===q.correct)score++});document.getElementById("result").innerHTML=`<h2>Resultado: ${score}/${t.questions.length}</h2><p>${score===t.questions.length?"🎉 Perfecto":score>=t.questions.length*.7?"👍 Muy bien":"💪 Repasa y vuelve a intentarlo."}</p>`}
+init();
+</script>
+</body>
+</html>
